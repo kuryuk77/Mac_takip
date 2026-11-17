@@ -22,7 +22,7 @@ const STALE_BEFORE = new Date(Date.now() - 1000 * 60 * 60 * 24 * 550);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let lastCall = 0;
 
-async function api(path, { retries = 3 } = {}) {
+async function api(path, { retries = 3, auth = true } = {}) {
   const wait = lastCall + DELAY_MS - Date.now();
   if (wait > 0) await sleep(wait);
   lastCall = Date.now();
@@ -32,14 +32,14 @@ async function api(path, { retries = 3 } = {}) {
     'X-Unfold-Subs': 'false',
     'X-Unfold-Lineups': 'false',
   };
-  if (TOKEN) headers['X-Auth-Token'] = TOKEN;
+  if (TOKEN && auth) headers['X-Auth-Token'] = TOKEN;
   let res;
   try {
     res = await fetch(API + path, { headers });
   } catch (err) {
     if (retries > 0) {
       await sleep(5000);
-      return api(path, { retries: retries - 1 });
+      return api(path, { retries: retries - 1, auth });
     }
     throw err;
   }
@@ -47,11 +47,11 @@ async function api(path, { retries = 3 } = {}) {
     const reset = Number(res.headers.get('X-RequestCounter-Reset')) || 60;
     console.log(`  hız sınırı, ${reset} sn bekleniyor`);
     await sleep((reset + 1) * 1000);
-    return api(path, { retries: retries - 1 });
+    return api(path, { retries: retries - 1, auth });
   }
   if (res.status >= 500 && retries > 0) {
     await sleep(10000);
-    return api(path, { retries: retries - 1 });
+    return api(path, { retries: retries - 1, auth });
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -226,7 +226,8 @@ async function main() {
     console.warn('FOOTBALL_DATA_TOKEN tanımlı değil; yalnızca lig listesi yazılacak.');
   }
 
-  const all = await api('/competitions');
+  // Anahtarla sorgulanınca API yalnızca planındaki ligleri listeler; tam liste için anahtarsız istenir.
+  const all = await api('/competitions', { auth: false });
   const byId = new Map(all.competitions.map((c) => [c.id, c]));
 
   const metaOf = (id, overrideName) => {
