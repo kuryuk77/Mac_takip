@@ -17,7 +17,7 @@ UEFA'nın 55 üye ülkesinin liglerini tek yerden izlemek için statik bir web s
 ## Veri kaynağı ve sınırları
 
 Veri [football-data.org](https://www.football-data.org) API'sinden gelir. **Ücretsiz plan** şunları kapsar:
-Premier League, Championship, Bundesliga, Serie A, LaLiga, Ligue 1, Eredivisie, Primeira Liga ve Şampiyonlar Ligi.
+Premier League, Championship, Bundesliga, Serie A, LaLiga, Ligue 1, Eredivisie, Primeira Liga ve Şampiyonlar Ligi (gerçek API ile doğrulandı).
 Diğer ligler (Süper Lig dahil) sitede "Ücretli planda" olarak görünür. Plan yükseltilirse ek işlem gerekmez, bir sonraki güncellemede kendiliğinden gelirler.
 
 Ücretsiz planda **olmayan** istatistikler:
