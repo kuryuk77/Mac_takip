@@ -352,7 +352,7 @@ async function pageLeague(id, tab = 'puan', arg) {
       ${comp.emblem ? `<img class="emblem" src="${esc(comp.emblem)}" alt="">` : ''}
       <div>
         <h1>${esc(comp.name)}</h1>
-        <div class="meta">${comp.area?.flag ? `<img class="flag" src="${esc(comp.area.flag)}" alt="">` : ''}<span>${esc(country?.name || comp.area?.name || '')}</span><span>· ${season} sezonu</span>${comp.season.matchday ? `<span>· ${comp.season.matchday}. hafta</span>` : ''}</div>
+        <div class="meta">${comp.area?.flag ? `<img class="flag" src="${esc(comp.area.flag)}" alt="">` : ''}<span>${esc(country?.name || comp.area?.name || '')}</span><span>· ${season} sezonu</span>${comp.season.matchday ? `<span>· ${comp.season.matchday}. ${comp.type === 'CUP' ? 'maç günü' : 'hafta'}</span>` : ''}</div>
       </div>
     </div>
     <nav class="tabs">${LEAGUE_TABS.map(([k, l]) => `<a href="#/lig/${id}/${k}" class="${k === tab ? 'active' : ''}">${l}</a>`).join('')}</nav>
@@ -361,13 +361,33 @@ async function pageLeague(id, tab = 'puan', arg) {
   ({ puan: tabStandings, fikstur: tabFixtures, haftalar: tabWeeks, oyuncular: tabPlayers, takimlar: tabTeams }[tab] || tabStandings)(el, comp, arg);
 }
 
+// API iç saha / deplasman tablosu vermezse skorlardan hesaplanır (tek tablolu ligler için).
+function splitTable(comp, side) {
+  const rows = {};
+  for (const m of comp.matches.filter((x) => isFinished(x) && (x.st === 'REGULAR_SEASON' || !x.st))) {
+    const id = side === 'HOME' ? m.h : m.a;
+    const gf = side === 'HOME' ? m.hs : m.as, ga = side === 'HOME' ? m.as : m.hs;
+    const r = (rows[id] ||= { team: id, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, res: [] });
+    r.p++; r.gf += gf; r.ga += ga;
+    if (gf > ga) { r.w++; r.pts += 3; r.res.push('W'); } else if (gf === ga) { r.d++; r.pts++; r.res.push('D'); } else { r.l++; r.res.push('L'); }
+  }
+  const table = Object.values(rows).map((r) => ({ ...r, gd: r.gf - r.ga, form: r.res.slice(-5).join(',') }))
+    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+    .map((r, i) => ({ ...r, pos: i + 1 }));
+  return table.length ? { stage: 'REGULAR_SEASON', type: side, group: null, table } : null;
+}
+
 function tabStandings(el, comp) {
   let type = 'TOTAL';
+  const totals = comp.standings.filter((s) => s.type === 'TOTAL');
+  if (totals.length === 1 && totals[0].stage === 'REGULAR_SEASON' && !comp.standings.some((s) => s.type === 'HOME')) {
+    for (const side of ['HOME', 'AWAY']) { const t = splitTable(comp, side); if (t) comp.standings.push(t); }
+  }
   const render = () => {
     const tables = comp.standings.filter((s) => s.type === type);
     if (!tables.length) { el.querySelector('#tables').innerHTML = '<div class="card empty">Puan durumu yok (eleme usulü turnuva olabilir).</div>'; return; }
     el.querySelector('#tables').innerHTML = tables.map((s, i) => `
-      ${tables.length > 1 || s.group ? `<h3 style="margin-top:${i ? 18 : 0}px">${esc(groupName(s.group) || stageName(s.stage))}</h3>` : ''}
+      ${tables.length > 1 ? `<h3 style="margin-top:${i ? 18 : 0}px">${esc(groupName(s.group) || stageName(s.stage))}</h3>` : ''}
       <div class="table-wrap"><table>
         <thead><tr><th>#</th><th>Takım</th><th class="num" title="Oynanan">O</th><th class="num" title="Galibiyet">G</th><th class="num" title="Beraberlik">B</th><th class="num" title="Mağlubiyet">M</th><th class="num" title="Atılan">A</th><th class="num" title="Yenilen">Y</th><th class="num" title="Averaj">Av</th><th class="num">Puan</th><th>Form</th></tr></thead>
         <tbody>${s.table.map((r) => `<tr>
@@ -597,6 +617,9 @@ async function pageTeam(compId, teamId) {
   const id = Number(teamId);
   const t = comp.teams[id];
   if (!t) { app.innerHTML = '<div class="card empty">Takım bulunamadı.</div>'; return; }
+  if (!comp.standings.some((s) => s.type === 'HOME') && comp.standings.filter((s) => s.type === 'TOTAL').length === 1) {
+    for (const side of ['HOME', 'AWAY']) { const tb = splitTable(comp, side); if (tb) comp.standings.push(tb); }
+  }
   const rowOf = (type) => comp.standings.filter((s) => s.type === type).flatMap((s) => s.table).find((r) => r.team === id);
   const total = rowOf('TOTAL'), home = rowOf('HOME'), away = rowOf('AWAY');
   const ts = teamStats(comp).find((r) => r.id === id);
